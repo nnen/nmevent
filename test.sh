@@ -1,0 +1,8 @@
+
+OLDPYTHONPATH=$PYTHONPATH
+export PYTHONPATH=$PYTHONPATH:./nmevent
+
+python test/test_nmevent.py
+
+export PYTHONPATH=$OLDPYTHONPATH
+
