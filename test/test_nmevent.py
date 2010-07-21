@@ -1,7 +1,19 @@
 # -*- coding: utf8 -*-
 
+import sys
+sys.path.append(sys.path[0] + '/../nmevent')
+
 import unittest
 from nmevent import *
+
+def function_observer_a(sender, *args, **keywords):
+	pass
+
+def function_observer_b(sender, *args, **keywords):
+	pass
+
+def function_bad_observer():
+	pass
 
 class Subject(object):
 	def __init__(self):
@@ -14,11 +26,22 @@ class Subject(object):
 	def fire_b(self):
 		self.event_b(self)
 
+class SlotSubject(object):
+	event_a = EventSlot()
+	event_b = EventSlot()
+
 class Observer(object):
 	def __init__(self):
 		self.event_caught = False
 
 	def handler(self, sender):
+		self.event_caught = True
+
+class CallableObserver(object):
+	def __init__(self):
+		self.event_caught = False
+
+	def __call__(self, *args, **keywords):
 		self.event_caught = True
 
 class Test(unittest.TestCase):
@@ -29,7 +52,16 @@ class Test(unittest.TestCase):
 		except:
 			self.fail("Event with no handler threw exception.")
 
-	def test_handling(self):
+	def test_function_handlers(self):
+		subject = Subject()
+		subject.event_a += function_observer_a
+		subject.event_a += function_observer_b
+		try:
+			subject.fire_a()
+		except:
+			self.fail("Event with function handlers threw exception.")
+	
+	def test_method_handlers(self):
 		subject = Subject()
 		observers = [Observer(), Observer(), Observer()]
 		for observer in observers:
@@ -38,10 +70,20 @@ class Test(unittest.TestCase):
 		for observer in observers:
 			self.assertTrue(observer.event_caught)
 
+	def test_callable_handlers(self):
+		subject = Subject()
+		observers = [CallableObserver(), CallableObserver(), CallableObserver()]
+		for observer in observers:
+			subject.event_a += observer
+		subject.fire_a()
+		for observer in observers:
+			self.assertTrue(observer.event_caught)
+
 	def test_removing(self):
 		subject = Subject()
 		observer_a = Observer()
 		observer_b = Observer()
+		observer_c = Observer()
 
 		subject.event_a += observer_a.handler
 		subject.event_a += observer_b.handler
@@ -51,7 +93,24 @@ class Test(unittest.TestCase):
 
 		self.assertTrue(observer_a.event_caught)
 		self.assertFalse(observer_b.event_caught)
-			
+		self.assertFalse(observer_c.event_caught)
+
+	def test_exception(self):
+		subject = Subject()
+		subject.event_a += function_bad_observer
+		self.assertRaises(TypeError, subject.fire_a)
+
+	def test_slot(self):
+		subject = SlotSubject()
+		observer_a = Observer()
+		observer_b = Observer()
+		subject.event_a += observer_a.handler
+		subject.event_b += observer_b.handler
+		subject.event_a(subject)
+
+		self.assertTrue(observer_a.event_caught)
+		self.assertFalse(observer_b.event_caught)
+		
 if __name__ == "__main__":
 	unittest.main()
 

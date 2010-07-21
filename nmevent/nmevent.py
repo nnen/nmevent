@@ -4,7 +4,23 @@ Copyright (c) 2010, Jan Milík.
 """
 
 __author__ = u"Jan Milík"
-__all__    = ['Event', 'EventArgs']
+__all__    = ['EventSlot', 'Event', 'EventArgs']
+
+class EventSlot(object):
+	EVENTS_ATTRIBUTE = '__events__'
+
+	def __get__(self, obj, objtype = None):
+		if obj is None:
+			return self
+		events = obj.__dict__.get(self.EVENTS_ATTRIBUTE, None)
+		if events is None:
+			events = {}
+			obj.__dict__[self.EVENTS_ATTRIBUTE] = events
+		event = events.get(id(self), None)
+		if event is None:
+			event = Event()
+			events[id(self)] = event
+		return event
 
 class Event(object):
 	"""
@@ -14,11 +30,14 @@ class Event(object):
 
 	Usage:
 
-	class Klass(object):
-		def __init__(self):
-			self.event1 = Event()
-			self.event2 = Event()
-			...
+	>>> class Klass(object):
+	...    def __init__(self):
+	...       self.event1 = Event()
+	...       self.event2 = Event()
+	...
+	...    def fire(self):
+	...       self.event1(self)
+	...
 	"""
 
 	def __init__(self):
