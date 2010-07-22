@@ -4,7 +4,14 @@ Copyright (c) 2010, Jan Milík.
 """
 
 __author__ = u"Jan Milík"
-__all__    = ['EventSlot', 'Event', 'EventArgs']
+__all__    = ['with_events', 'EventSlot', 'Event', 'EventArgs']
+
+def with_events(clss):
+	for name, attr in clss.__dict__.items():
+		if not isinstance(attr, property):
+			continue
+		setattr(clss, name + "_changed", EventSlot())
+	return clss
 
 class EventSlot(object):
 	EVENTS_ATTRIBUTE = '__events__'
@@ -55,17 +62,20 @@ class Event(object):
 		self.handlers.remove(handler)
 		return self
 	__isub__ = remove_handler
+
+	def has_handler(self, handler):
+		"""Returns True if the specified handler is associated with this event."""
+		return (handler in self.handlers)
+	__contains__ = has_handler
 	
 	def fire(self, sender, *args, **keywords):
-		"""Fires this event. Calls all the handlers with the
-		arguments and keywords."""
+		"""Fires this event and calls all of its handlers."""
 		for handler in self.handlers:
 			handler(sender, *args, **keywords)
 	__call__ = fire
 	
 	def disconnect(self):
-		"""Clears this event's handler collection. Removes
-		all handlers."""
+		"""Disconnects this event from all handlers."""
 		self.handlers = set()
 
 class EventArgs(object):
