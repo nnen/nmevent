@@ -4,30 +4,13 @@ Copyright (c) 2010, Jan Milík.
 """
 
 __author__ = u"Jan Milík"
-__all__    = ['with_events', 'EventSlot', 'Event', 'EventArgs']
+__all__    = ['with_events', 'EventSlot', 'Event', 'BoundEvent', 'EventArgs']
 
-def with_events(clss):
-	for name, attr in clss.__dict__.items():
-		if not isinstance(attr, property):
-			continue
-		setattr(clss, name + "_changed", EventSlot())
-	return clss
-
-class EventSlot(object):
-	EVENTS_ATTRIBUTE = '__events__'
-
-	def __get__(self, obj, objtype = None):
-		if obj is None:
-			return self
-		events = obj.__dict__.get(self.EVENTS_ATTRIBUTE, None)
-		if events is None:
-			events = {}
-			obj.__dict__[self.EVENTS_ATTRIBUTE] = events
-		event = events.get(id(self), None)
-		if event is None:
-			event = Event()
-			events[id(self)] = event
-		return event
+class EventArgs(object):
+	"""
+	Base class for event arguments objects.
+	"""
+	pass
 
 class Event(object):
 	"""
@@ -78,9 +61,48 @@ class Event(object):
 		"""Disconnects this event from all handlers."""
 		self.handlers = set()
 
-class EventArgs(object):
-	"""
-	Base class for event arguments objects.
-	"""
-	pass
+class BoundEvent(object):
+	def __init__(self, obj, event):
+		self.obj   = obj
+		self.event = event
+
+	def __getattr__(self, name):
+		return getattr(self.event, name)
+
+	def __iadd__(self, handler):
+		self.event += handler
+		return self
+
+	def __isub__(self, handler):
+		self.event -= handler
+		return self
+
+	def __contains__(self, handler):
+		return (handler in self.event)
+
+	def __call__(self, *args, **keywords):
+		self.event(self.obj, *args, **keywords)
+
+class EventSlot(object):
+	EVENTS_ATTRIBUTE = '__events__'
+
+	def __get__(self, obj, objtype = None):
+		if obj is None:
+			return self
+		events = obj.__dict__.get(self.EVENTS_ATTRIBUTE, None)
+		if events is None:
+			events = {}
+			obj.__dict__[self.EVENTS_ATTRIBUTE] = events
+		event = events.get(id(self), None)
+		if event is None:
+			event = Event()
+			events[id(self)] = event
+		return BoundEvent(obj, event)
+
+def with_events(clss):
+	for name, attr in clss.__dict__.items():
+		if not isinstance(attr, property):
+			continue
+		setattr(clss, name + "_changed", EventSlot())
+	return clss
 
