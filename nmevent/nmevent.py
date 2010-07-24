@@ -1,7 +1,15 @@
 # -*- encoding: utf-8 -*-
 # vim: expandtab:tabstop=4:softtabstop=4:autoindent
 
-"""
+"""nmevent - C#-like implementation of the Observer pattern
+
+This is a Python module "nmevent", simple C#-like implementation of
+the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
+It's main purpose and goal is to allow developers to use events
+with C#-like syntax in their Python classes.
+
+LICENSE
+
 Copyright (c) 2010, Jan Milík.
 
 This program is free software: you can redistribute it and/or modify
@@ -18,7 +26,7 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__author__ = u"Jan Milik"
+__author__ = u"Jan Milik <milikjan@fit.cvut.cz>"
 __all__    = ['with_events', 'EventSlot', 'Event', 'BoundEvent', 'EventArgs']
 
 class EventArgs(object):
