@@ -29,6 +29,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 __author__ = u"Jan Milik <milikjan@fit.cvut.cz>"
 __all__    = ['with_events', 'EventSlot', 'Event', 'BoundEvent', 'EventArgs']
 
+import __builtin__
+
 class EventArgs(object):
     """Base class for event arguments objects.
     """
@@ -146,6 +148,62 @@ class EventSlot(object):
             events[id(self)] = event
         return BoundEvent(obj, event)
 
+class Property(object):
+    """Eventful property descriptor.
+    """
+
+    @property
+    def name(self):
+        if self.fget is not None:
+            return self.fget.__name__
+        if self.fset is not None:
+            return self.fset.__name__
+        return None
+
+    def __init__(self, fget = None, fset = None, fdel = None, changed = None, property_changed = None):
+        self.fget = fget
+        self.fset = fset
+        self.fdel = fdel
+
+        self.changed = changed
+        self.property_changed = property_changed
+
+    def __get__(self, obj, type = None):
+        if obj is None:
+            return self
+        if self.fget is None:
+            raise AttributeError, "Unreadable attribute."
+        return self.fget(obj)
+
+    def __set__(self, obj, value):
+        if self.fset is None:
+            raise AttributeError, "Can't set attribute."
+        self.fset(obj, value)
+        self._fire(self.changed, obj)
+        self._fire(self.property_changed, obj, name = self.name)
+
+    def __delete__(self, obj):
+        if self.fdel is None:
+            raise AttributeError, "Can't delete attribute."
+        self.fdel(obj)
+
+    def _fire(self, event, obj, **keywords):
+        if isinstance(event, EventSlot):
+            event.__get__(obj)(**keywords)
+        elif isinstance(event, Event):
+            event(obj, **keywords)
+
+    def setter(self, function):
+        self.fset = function
+        return self
+
+    def deleter(self, function):
+        self.fdel = function
+        return self
+
+def property(function):
+    return Property(function)
+
 def with_events(clss):
     """Decorates a class with some automatic event slots.
 
@@ -154,9 +212,16 @@ def with_events(clss):
     property.
     """
 
+    property_changed = EventSlot()
+    setattr(clss, "property_changed", property_changed)
+
     for name, attr in clss.__dict__.items():
-        if not isinstance(attr, property):
-            continue
-        setattr(clss, name + "_changed", EventSlot())
+        if isinstance(attr, __builtin__.property):
+            setattr(clss, name + "_changed", EventSlot())
+        elif isinstance(attr, Property):
+            slot = EventSlot()
+            setattr(clss, name + "_changed", slot)
+            attr.changed = slot
+            attr.property_changed = property_changed
     return clss
 
