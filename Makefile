@@ -1,8 +1,12 @@
-egg: README
-	python setup.py bdist_egg
+PYTHON = python
+PYLINT = pylint
+COVERAGE = coverage
 
-wininst:
-	python setup.py bdist_wininst
+egg: README
+	$(PYTHON) setup.py bdist_egg
+
+wininst: README
+	$(PYTHON) setup.py bdist_wininst
 
 clean:
 	rm -fR build dist nmevent.egg-info htmlcov
@@ -10,16 +14,17 @@ clean:
 	rm -f .coverage README
 
 testonly:
-	python test/test_nmevent.py
+	$(PYTHON) test/test_nmevent.py
 
 unittest:
-	coverage run test/test_nmevent.py
+	$(COVERAGE) run test/test_nmevent.py
 	echo
-	coverage report -m
-	coverage html
+	$(COVERAGE) report -m
+	$(COVERAGE) html
 
 lint:
-	pylint nmevent/nmevent.py
+	$(PYLINT) nmevent/nmevent.py
 
 README: nmevent/nmevent.py
-	python make-readme.py
+	$(PYTHON) make-readme.py
+
