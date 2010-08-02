@@ -27,7 +27,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
 __author__ = u"Jan Milik <milikjan@fit.cvut.cz>"
-__all__    = ['with_events', 'EventSlot', 'Event', 'BoundEvent', 'EventArgs']
+__all__    = [
+    'nmproperty',
+    'with_events',
+    'EventSlot',
+    'Event',
+    'BoundEvent',
+    'EventArgs',
+]
 
 import __builtin__
 
@@ -106,6 +113,16 @@ class BoundEvent(object):
 
     Bound event automatically uses the object it is
     bound to as its sender when raising the event.
+    This class is not to be used directly by the client
+    code; instances of this class are created by
+    the EventSlot class.
+
+    Usage:
+
+    >>> instance += handler
+    >>> instance -= handler
+    >>> handler in instance
+    >>> instance(*args, **keywords)
     """
 
     def __init__(self, obj, event):
@@ -131,6 +148,17 @@ class BoundEvent(object):
 
 class EventSlot(object):
     """Event descriptor.
+
+    Usage:
+
+    >>> class Example(object):
+    ...    something_changed = EventSlot()
+    ...
+    ...    def foo(self):
+    ...       self.something_changed()
+    ...
+    >>> example = Example()
+    >>> example.something_changed += handler
     """
 
     EVENTS_ATTRIBUTE = '__events__'
@@ -150,17 +178,42 @@ class EventSlot(object):
 
 class Property(object):
     """Eventful property descriptor.
+
+    This class is not meant to be used directly by the
+    client code, even though nothing stops you from
+    doing so. Instances of this class are supposed to
+    be created by the @nmproperty decorator.
+
+    Usage:
+
+    >>> class Example(object):
+    ...    @nmproperty:
+    ...    def x(self):
+    ...       return self._x
+    ...
+    ...    @x.setter
+    ...    def x(self, value):
+    ...       self._x = value
+    ...
+    >>> example = Example()
+    >>> exmaple.x_changed += handler
+    >>> example.x = 42
     """
 
     @property
     def name(self):
+        """The name of the property.
+
+        This should be the name of an object's attribute
+        that holds the property. The name is guessed by
+        retrieving the name of the getter function if present.
+        """
         if self.fget is not None:
             return self.fget.__name__
-        if self.fset is not None:
-            return self.fset.__name__
         return None
 
-    def __init__(self, fget = None, fset = None, fdel = None, changed = None, property_changed = None):
+    def __init__(self, fget = None, fset = None, fdel = None,
+                 changed = None, property_changed = None):
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -168,7 +221,7 @@ class Property(object):
         self.changed = changed
         self.property_changed = property_changed
 
-    def __get__(self, obj, type = None):
+    def __get__(self, obj, objtype = None):
         if obj is None:
             return self
         if self.fget is None:
@@ -178,9 +231,14 @@ class Property(object):
     def __set__(self, obj, value):
         if self.fset is None:
             raise AttributeError, "Can't set attribute."
+        if self.fget is None:
+            self.fset(obj, value)
+            return
+        old_value = self.fget(obj)
         self.fset(obj, value)
-        self._fire(self.changed, obj)
-        self._fire(self.property_changed, obj, name = self.name)
+        if old_value != value:
+            self._fire(self.changed, obj)
+            self._fire(self.property_changed, obj, name = self.name)
 
     def __delete__(self, obj):
         if self.fdel is None:
@@ -188,24 +246,46 @@ class Property(object):
         self.fdel(obj)
 
     def _fire(self, event, obj, **keywords):
+        """Propety._fire(event, obj, **keywords) - private helper function.
+        """
         if isinstance(event, EventSlot):
             event.__get__(obj)(**keywords)
         elif isinstance(event, Event):
             event(obj, **keywords)
 
     def setter(self, function):
+        """Property.setter(function) - method decorator to set the setter function.
+
+        Works exactly like the @property.setter decorator.
+        """
         self.fset = function
         return self
 
     def deleter(self, function):
+        """Property.deleter(function) - method decorator te set the delete function.
+
+        Works exatcly like the built-in @property.deleter.
+        """
         self.fdel = function
         return self
 
-def property(function):
+def nmproperty(function):
+    """@nmproperty - method decorator.
+
+    Creates new Property object using the decorated method
+    as the getter function. Setter and deleter functions can be
+    set by the @name.setter and @name.deleter decorators where 
+    "name" is the name of the property (the name of the getter
+    function).
+
+    This decorator is called "nmproperty" to avoid name conflict
+    with the built-in "property" function and decorator.
+    """
     return Property(function)
 
 def with_events(clss):
-    """Decorates a class with some automatic event slots.
+    """with_events(clss) - Decorates a class with some automatic
+    event slots.
 
     Automatically adds property change notification events
     of the name "x_changed", where x is the name of the
