@@ -8,7 +8,8 @@ the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
 It's main purpose and goal is to allow developers to use events
 with C#-like syntax in their Python classes.
 
-LICENSE
+License
+=======
 
 Copyright (c) 2010, Jan Milík.
 
@@ -32,7 +33,6 @@ __all__    = [
     'with_events',
     'EventSlot',
     'Event',
-    'BoundEvent',
     'EventArgs',
 ]
 
@@ -58,13 +58,12 @@ class Event(object):
 
     Usage:
 
-    >>> class Klass(object):
+    >>> class Example(object):
     ...    def __init__(self):
-    ...       self.event1 = Event()
-    ...       self.event2 = Event()
+    ...       self.event = Event()
     ...
     ...    def fire(self):
-    ...       self.event1(self)
+    ...       self.event(self)
     ...
     """
 
@@ -115,7 +114,7 @@ class BoundEvent(object):
     bound to as its sender when raising the event.
     This class is not to be used directly by the client
     code; instances of this class are created by
-    the EventSlot class.
+    the :class:`EventSlot` class.
 
     Usage:
 
@@ -182,7 +181,7 @@ class Property(object):
     This class is not meant to be used directly by the
     client code, even though nothing stops you from
     doing so. Instances of this class are supposed to
-    be created by the @nmproperty decorator.
+    be created by the :func:`nmproperty` decorator.
 
     Usage:
 
@@ -270,26 +269,31 @@ class Property(object):
         return self
 
 def nmproperty(function):
-    """@nmproperty - method decorator.
+    """Eventful property decorator.
 
-    Creates new Property object using the decorated method
+    Creates new :class:`Property` object using the decorated method
     as the getter function. Setter and deleter functions can be
-    set by the @name.setter and @name.deleter decorators where 
-    "name" is the name of the property (the name of the getter
-    function).
+    set by the :meth:`Property.setter` and :meth:`Property.deleter`
+    decorators where "name" is the name of the property (the name
+    of the getter function).
 
-    This decorator is called "nmproperty" to avoid name conflict
-    with the built-in "property" function and decorator.
+    This decorator is called :func:`nmproperty` to avoid name conflict
+    with the built-in `property` function and decorator.
+
+    :param function: function to be used as the property getter function
+    :returns: new `Property` object
     """
     return Property(function)
 
 def with_events(clss):
-    """with_events(clss) - Decorates a class with some automatic
-    event slots.
+    """Decorates a class with some automatic event slots.
 
     Automatically adds property change notification events
     of the name "x_changed", where x is the name of the
     property.
+
+    :param clss: class object to be decorated
+    :returns: decorated class
     """
 
     property_changed = EventSlot()

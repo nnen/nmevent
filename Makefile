@@ -1,17 +1,25 @@
 PYTHON = python
 PYLINT = pylint
 COVERAGE = coverage
+SPHINX-BUILD = sphinx-build
 
-egg: README
+sdist: README docs
+	$(PYTHON) setup.py sdist
+
+egg: README docs
 	$(PYTHON) setup.py bdist_egg
 
-wininst: README
+wininst: README docs
 	$(PYTHON) setup.py bdist_wininst
 
+docs:
+	make -C doc html
+
 clean:
-	rm -fR build dist nmevent.egg-info htmlcov
+	rm -fR build dist nmevent.egg-info htmlcov doc/html
 	rm -fR nmevent/nmevent.egg-info nmevent/*.pyc
 	rm -f .coverage README
+	make -C doc clean
 
 testonly:
 	$(PYTHON) test/test_nmevent.py
