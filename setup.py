@@ -14,7 +14,7 @@ setup(
 	author_email     = 'milikjan@fit.cvut.cz',
 	description      = 'A simple C#-like implementation of the Observer design pattern.',
 	long_description = nmevent.__doc__,
-	url              = 'http://milik.cz/projects/nmevent',
+	url              = 'http://pypi.python.org/pypi/nmevent',
 	
 	package_dir = {'': 'nmevent'},
 	py_modules  = ['nmevent'],
@@ -25,7 +25,7 @@ setup(
 	classifiers = [
 		'Development Status :: 1 - Planning',
 		'Intended Audience :: Developers',
-		'License :: OSI Approved :: GNU Library or Lesser General Public License (LPGL)',
+		'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
 		'Natural Language :: English',
 		'Operating System :: OS Independent',
 		'Programming Language :: Python :: 2.6',
