@@ -34,5 +34,7 @@ lint:
 	$(PYLINT) nmevent/nmevent.py
 
 README: nmevent/nmevent.py
-	$(PYTHON) make-readme.py
+	rm -f README
+	make -C doc text/index.txt
+	cp doc/text/index.txt README
 

@@ -9,7 +9,7 @@ import nmevent
 
 setup(
 	name             = 'nmevent',
-	version          = '0.1.1',
+	version          = nmevent.__version__,
 	author           = 'Jan Milík',
 	author_email     = 'milikjan@fit.cvut.cz',
 	description      = 'A simple C#-like implementation of the Observer design pattern.',

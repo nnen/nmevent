@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 # vim: expandtab:tabstop=4:softtabstop=4:autoindent
 
-"""nmevent - C#-like implementation of the Observer pattern
+"""nmevent v0.2 - C#-like implementation of the Observer pattern
 
 This is a Python module :mod:`nmevent`, simple C#-like implementation of
 the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
@@ -24,22 +24,17 @@ The most straightfoward way to use :mod:`nmevent` is this:
 >>> example = ExampleClass()
 >>> example.event += handler
 
-It should be noted, that event doesn't necessarily need to
-be an object attribute. :class:`Event` instance is basically
-just a callable object that works as a sort of "dispatch
-demultiplexer".
+It should be noted, that event doesn't necessarily need to be an object
+attribute. :class:`Event` instance is basically just a callable object that
+works as a sort of "dispatch demultiplexer".
 
-This usage, however, isn't very C#-like. In C#, events are declared
-in class scope and that's where the :class:`EventSlot` comes in.
-Once you've created event using :class:`EventSlot`, you can
-use the same way you use :class:`Event`, only you don't need
-to specify the sender when raising the event. That's because
-the event is already bound to the instance of the class it has
-been declared in.
+This usage, however, isn't very C#-like. In C#, events are declared in class
+scope and that's why the :class:`Event` class also supports the descriptor
+protocol.
 
 >>> from nmevent import EventSlot
 >>> class ExampleClass(object):
-...    event = EventSlot()
+...    event = Event()
 ...
 ...    def _do_something(self):
 ...       self.event()
@@ -50,9 +45,19 @@ been declared in.
 >>> example = ExampleClass()
 >>> example.event += handler
 
-Perhaps this looks even more straightfoward than instantiating
-:class:`Event` in object's constructor, but there's actually
-lot more going on under hood this time.
+Perhaps this looks even more straightfoward than instantiating :class:`Event`
+in object's constructor, but there's actually lot more going on under hood this
+time.
+
+Finally, there is the :class:`Property` descriptor and the associated
+:func:`nmproperty` function decorator, which work very much like the built-in
+``property`` object and decorator, except it can optionally call a callback
+function if the property's value changes after calling the setter function. It
+can work in tandem with the :func:`with_events` class decorator, which
+decorates the class with property change events and connects them to the
+instances of :class:`Property` class. It also creates events for the built-in
+``property`` objects, but you have to raise the events yourself in the setter
+function or elsewhere.
 
 >>> import nmevent
 >>> @nmevent.with_events
@@ -60,6 +65,19 @@ lot more going on under hood this time.
 ...    @nmevent.nmproperty
 ...    def x(self):
 ...       return self._x
+...
+...    @x.setter
+...    def x(self, value):
+...       self._x = value
+...
+...    @property
+...    def y(self):
+...       return self._y
+...
+...    @y.setter
+...    def y(self, value):
+...       old_value, self._y = self._y, value
+...       self.y_changed(old_value = old_value)
 ...
 >>> example = ExampleClass()
 >>> example.x_changed += handler
@@ -84,27 +102,17 @@ You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
+__version__ = __doc__.splitlines()[0].split(' ')[1][1:]
 __author__ = u"Jan Milik <milikjan@fit.cvut.cz>"
 __all__    = [
     'nmproperty',
     'with_events',
-    'EventSlot',
     'Event',
-    'EventArgs',
 ]
 
 import __builtin__
 
-class EventArgs(object):
-    """Base class for event arguments objects.
-    """
-
-    def __init__(self, **keywords):
-        self.keywords = keywords
-
-    def __getattr__(self, name):
-        if name in self.keywords:
-            return self.keywords[name]
+EVENTS_ATTRIBUTE = '__nmevents__'
 
 class Event(object):
     """Subject in the observer pattern.
@@ -124,11 +132,33 @@ class Event(object):
     ...
     """
 
+    __slots__ = ('handlers', )
+
     def __init__(self):
         self.handlers = set()
+
+    def __get__(self, obj, objtype = None):
+        return self.bind(objtype, obj)
+
+    def __set__(self, obj, value):
+        raise AttributeError, "Events are read-only attributes."
+
+    def __del__(self, obj):
+        raise AttributeError, "Events are read-only attributes."
+
+    def bind(objtype, obj = None):
+        """Binds the event to a class and optionally an instance."""
+        return InstanceEvent(self, objtype, obj)
     
     def add_handler(self, handler):
-        """Adds a handler (observer) to this event."""
+        """Adds a handler (observer) to this event.
+
+        ``__iadd__`` attribute of this class is just an alias of this
+        method, so the two following statements are equivalent:
+
+        >>> event.add_handler(handler)
+        >>> event += handler
+        """
         self.handlers.add(handler)
         return self
     __iadd__ = add_handler
@@ -164,98 +194,84 @@ class Event(object):
         """
         self.handlers = set()
 
-class BoundEvent(object):
-    """Event bound to an instance of an object.
+class InstanceEvent(object):
+    """Bound or unbound event.
 
-    Bound event automatically uses the object it is
-    bound to as its sender when raising the event.
-    This class is not to be used directly by the client
-    code; instances of this class are created by
-    the :class:`EventSlot` class.
+    In Python, unbound actually means bound to a class.
+    Bound means bound to both a class and an instance.
+    Instances of this class cannot be bound to the 
+    ``None`` object, because it is used to indicate
+    that the event is unbound.
 
-    The difference between :class:`Event` and :class:`EventSlot`
-    is somewhat similar to the difference between python's
-    functions and bound methods (bound method automatically
-    passes the object it is bound to to the function it envelopes
-    as the first argument).
+    This class is meant to be instantiated either through
+    the :class:`Event`'s descriptor protocol, or by
+    the :meth:`Event.bind` method.
 
-    Usage:
+    :param event: :class:`Event` instance to be bound
+    :param clss: class the event should be bound to (sender must be of this type)
+    :param sender: sender to bind the event to
 
-    >>> instance += handler
-    >>> instance -= handler
-    >>> handler in instance
-    >>> instance(*args, **keywords)
+    .. attribute:: __slots__
+       
+       This class uses the ``__slots__`` attribute to save
+       memory, so don't try to assign new attributes to
+       its instances.
+
+    .. attribute:: im_event
+       
+       :class:`Event` instance that is bound.
+
+    .. attribute:: im_class
+
+       Class object this event is bound to.
+
+    .. attribute:: im_sender
+
+       Instance this event is bound to.
+
+       The following condition must be always true:
+
+       >>> isinstance(self.im_sender, self.im_class)
     """
+    
+    __slots__ = ('im_event', 'im_class', 'im_sender', )
 
-    def __init__(self, obj, event):
-        self.obj   = obj
-        self.event = event
-
-    def __getattr__(self, name):
-        return getattr(self.event, name)
-
-    def __iadd__(self, handler):
-        self.event += handler
-        return self
-
-    def __isub__(self, handler):
-        self.event -= handler
-        return self
-
-    def __contains__(self, handler):
-        return (handler in self.event)
-
+    @property
+    def is_bound(self):
+        """``True`` if the event is bound to a sender, ``False`` otherwise."""
+        return bool(self.im_sender is not None)
+    
+    def __init__(self, event, clss, sender = None):
+        self.im_event = event
+        self.im_class = clss
+        self.im_sender = sender
+    
     def __call__(self, *args, **keywords):
-        self.event(self.obj, *args, **keywords)
-
-class EventSlot(object):
-    """Event descriptor.
-
-    This is an event descriptor, which means it works
-    kind of like the built-in property object. You can
-    find more information on descriptors in Python's
-    documentation (http://docs.python.org/reference/datamodel#customizing-attribute-access),
-    or in a number of articles such as Raymond Hettinger's
-    how-to (http://users.rcn.com/python/download/Descriptor.htm).
-    In short, as the Python documentation puts it, descriptor
-    is an object with "binding behavior".
-
-    The rationale for this class is that, unlike the :class:`Event`
-    class alone, it alows client to declare events in the class scope.
-    The events don't need the ``__init__()`` method to be run in order
-    to be instantiated. This is especially helpfull when using inheritance,
-    because the inherited class doesn't need to explicitly call base
-    class's constructor in order to inherit the events.
-
-    Also, declaring the events in the class scope is more C#-like
-    than instantiating them in the constructor.
-
-    Usage:
-
-    >>> class Example(object):
-    ...    something_changed = EventSlot()
-    ...
-    ...    def foo(self):
-    ...       self.something_changed()
-    ...
-    >>> example = Example()
-    >>> example.something_changed += handler
-    """
-
-    EVENTS_ATTRIBUTE = '__events__'
-
-    def __get__(self, obj, objtype = None):
-        if obj is None:
-            return self
-        events = obj.__dict__.get(self.EVENTS_ATTRIBUTE, None)
+        sender = self.im_sender
+        if sender is None:
+            if len(args) < 1:
+                raise TypeError, ("Unbound event must be called with "
+                    "at least 1 positional argument representing the sender.")
+            if type(args[0]) is not self.im_class:
+                raise TypeError, ("This unbound event must be called with "
+                    "%s instance as the first argument." % (self.im_class.__name__))
+            sender = args[0]
+            args = args[1:]
+        events = sender.__dict__.get(EVENTS_ATTRIBUTE, None)
         if events is None:
             events = {}
-            obj.__dict__[self.EVENTS_ATTRIBUTE] = events
-        event = events.get(id(self), None)
+            sender.__dict__[self.EVENTS_ATTRIBUTE] = events
+        event = events.get(id(self.im_event), None)
         if event is None:
             event = Event()
-            events[id(self)] = event
-        return BoundEvent(obj, event)
+            events[id(self.im_event)] = event
+        event(sender, *args, **keywords)
+        return self.im_event(sender, *args, **keywords)
+
+    def __str__(self):
+        if self.is_bound:
+            return "<bound event>"
+        return "<unbound event>"
 
 class Property(object):
     """Eventful property descriptor.
@@ -375,21 +391,15 @@ class Property(object):
         old_value = self.fget(obj)
         self.fset(obj, value)
         if old_value != value:
-            self._fire(self.changed, obj, old_value = old_value)
-            self._fire(self.property_changed, obj, old_value = old_value, name = self.name)
+            if self.changed is not None:
+                self.changed(old_value = old_value)
+            if self.property_changed is not None:
+                self.property_changed(old_value = old_value, name = self.name)
 
     def __delete__(self, obj):
         if self.fdel is None:
             raise AttributeError, "Can't delete attribute."
         self.fdel(obj)
-
-    def _fire(self, event, obj, **keywords):
-        """Propety._fire(event, obj, **keywords) - private helper function.
-        """
-        if isinstance(event, EventSlot):
-            event.__get__(obj)(**keywords)
-        elif isinstance(event, Event):
-            event(obj, **keywords)
 
     def setter(self, function):
         """Sets the setter function and returns self.

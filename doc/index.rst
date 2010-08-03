@@ -11,37 +11,42 @@ Welcome to nmevent's documentation!
 
 .. automodule:: nmevent
 
+``nmevent`` module
+==================
+
+.. attribute:: nmevent.EVENTS_ATTRIBUTE
+   
+   Value of this module variable is the name of the attribute
+   that is used to store event data in object instances when
+   :class:`Event` is used as an descriptor. 
+   
+   If the class of your object uses the ``__slots__`` attribute,
+   don't forget to include the value of this variable in the
+   sequence you assign to ``__slots__``.
+   
+   Example:
+   
+   >>> class Example(object):
+   ...    __slots__ = ('foo', 'bar', nmevent.EVENTS_ATTRIBUTE, )
+   ...    event = nmevent.Event()
+
 Types
-=====
+-----
 
 .. autoclass:: nmevent.Event
 	:members:
 
-.. autoclass:: nmevent.EventSlot
-	:members:
-
-Functions
-=========
-
-.. autofunction:: nmevent.nmproperty
-.. autofunction:: nmevent.with_events
-
-Other types
-===========
-
-These types are not meant to be used by the client code directly.
-That is why they are not listed in the module's ``__all__`` attribute
-and will not be imported when doing ``from nmevent import *``.
-However, nothing really stops you from using them if you insist on it.
-
-The types below are documented here only to give you a better idea
-about what's going on.
-
-.. autoclass:: nmevent.BoundEvent
+.. autoclass:: nmevent.InstanceEvent
 	:members:
 
 .. autoclass:: nmevent.Property
 	:members:
+
+Functions
+---------
+
+.. autofunction:: nmevent.nmproperty
+.. autofunction:: nmevent.with_events
 
 Indices and tables
 ==================
