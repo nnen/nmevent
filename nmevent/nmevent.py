@@ -3,10 +3,67 @@
 
 """nmevent - C#-like implementation of the Observer pattern
 
-This is a Python module "nmevent", simple C#-like implementation of
+This is a Python module :mod:`nmevent`, simple C#-like implementation of
 the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
 It's main purpose and goal is to allow developers to use events
 with C#-like syntax in their Python classes.
+
+Usage example
+=============
+
+The most straightfoward way to use :mod:`nmevent` is this:
+
+>>> import nmevent
+>>> class ExampleClass(object):
+...    def __init__(self):
+...       self.event = nmevent.Event()
+...
+...    def _do_something(self):
+...       self.event(self)
+...
+>>> example = ExampleClass()
+>>> example.event += handler
+
+It should be noted, that event doesn't necessarily need to
+be an object attribute. :class:`Event` instance is basically
+just a callable object that works as a sort of "dispatch
+demultiplexer".
+
+This usage, however, isn't very C#-like. In C#, events are declared
+in class scope and that's where the :class:`EventSlot` comes in.
+Once you've created event using :class:`EventSlot`, you can
+use the same way you use :class:`Event`, only you don't need
+to specify the sender when raising the event. That's because
+the event is already bound to the instance of the class it has
+been declared in.
+
+>>> from nmevent import EventSlot
+>>> class ExampleClass(object):
+...    event = EventSlot()
+...
+...    def _do_something(self):
+...       self.event()
+...
+>>> def handler(sender, **keywords):
+...    pass
+...
+>>> example = ExampleClass()
+>>> example.event += handler
+
+Perhaps this looks even more straightfoward than instantiating
+:class:`Event` in object's constructor, but there's actually
+lot more going on under hood this time.
+
+>>> import nmevent
+>>> @nmevent.with_events
+... class ExampleClass(object):
+...    @nmevent.nmproperty
+...    def x(self):
+...       return self._x
+...
+>>> example = ExampleClass()
+>>> example.x_changed += handler
+>>> example.x = 10 # handler gets called
 
 License
 =======
@@ -116,6 +173,12 @@ class BoundEvent(object):
     code; instances of this class are created by
     the :class:`EventSlot` class.
 
+    The difference between :class:`Event` and :class:`EventSlot`
+    is somewhat similar to the difference between python's
+    functions and bound methods (bound method automatically
+    passes the object it is bound to to the function it envelopes
+    as the first argument).
+
     Usage:
 
     >>> instance += handler
@@ -147,6 +210,25 @@ class BoundEvent(object):
 
 class EventSlot(object):
     """Event descriptor.
+
+    This is an event descriptor, which means it works
+    kind of like the built-in property object. You can
+    find more information on descriptors in Python's
+    documentation (http://docs.python.org/reference/datamodel#customizing-attribute-access),
+    or in a number of articles such as Raymond Hettinger's
+    how-to (http://users.rcn.com/python/download/Descriptor.htm).
+    In short, as the Python documentation puts it, descriptor
+    is an object with "binding behavior".
+
+    The rationale for this class is that, unlike the :class:`Event`
+    class alone, it alows client to declare events in the class scope.
+    The events don't need the ``__init__()`` method to be run in order
+    to be instantiated. This is especially helpfull when using inheritance,
+    because the inherited class doesn't need to explicitly call base
+    class's constructor in order to inherit the events.
+
+    Also, declaring the events in the class scope is more C#-like
+    than instantiating them in the constructor.
 
     Usage:
 
@@ -183,6 +265,13 @@ class Property(object):
     doing so. Instances of this class are supposed to
     be created by the :func:`nmproperty` decorator.
 
+    :param fget: getter function
+    :param fget: getter function
+    :param fset: setter function
+    :param fdel: deleter function
+    :param changed: value changed notification event
+    :param property_changed: a value changed notification event
+
     Usage:
 
     >>> class Example(object):
@@ -197,6 +286,55 @@ class Property(object):
     >>> example = Example()
     >>> exmaple.x_changed += handler
     >>> example.x = 42
+
+    .. attribute:: fget
+       
+       Getter function.
+
+       If non-None, this function gets called every time
+       the value of the property is retrieved. The return
+       value of this function is returned as the value of
+       the property.
+
+    .. attribute:: fset
+       
+       Setter function.
+
+       If non-None, this function gets called every time
+       the value of the property is set. This function
+       is responsible for actually storing the value somehow.
+       
+       If this attribute is ``None``, the property is considered
+       read-only.
+
+    .. attribute:: fget
+       
+       Deleter function.
+
+    .. attribute:: changed
+       
+       Value change notification event.
+
+       If non-None, this event will be raised every time
+       this property is set to a different value.
+
+    .. attribute:: property_changed
+       
+       Property value change notification event.
+       
+       If none-None, this event will be raised every time
+       this property is set to a different value. Unlike
+       the :attr:`~Property.changed` event, however, the
+       handlers of this event will also be passed keyword
+       ``name``, which will contain the name of this property
+       (see :attr:`Property.name`).
+
+       This is can be used when you need to watch for change
+       of any property, but need to know which one changed.
+
+       This event has been inspired by the .NET framework's
+       ``INotifyPropertyChanged`` interface (see
+       http://msdn.microsoft.com/en-US/library/system.componentmodel.inotifypropertychanged.aspx)
     """
 
     @property
@@ -213,6 +351,7 @@ class Property(object):
 
     def __init__(self, fget = None, fset = None, fdel = None,
                  changed = None, property_changed = None):
+        """Constructor."""
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -236,8 +375,8 @@ class Property(object):
         old_value = self.fget(obj)
         self.fset(obj, value)
         if old_value != value:
-            self._fire(self.changed, obj)
-            self._fire(self.property_changed, obj, name = self.name)
+            self._fire(self.changed, obj, old_value = old_value)
+            self._fire(self.property_changed, obj, old_value = old_value, name = self.name)
 
     def __delete__(self, obj):
         if self.fdel is None:
@@ -253,9 +392,33 @@ class Property(object):
             event(obj, **keywords)
 
     def setter(self, function):
-        """Property.setter(function) - method decorator to set the setter function.
+        """Sets the setter function and returns self.
 
-        Works exactly like the @property.setter decorator.
+        This function is meant to be used as a method decorator,
+        even though it can be called directly to set the
+        setter function of its property.
+
+        Usage:
+
+        >>> class ExampleClass(object):
+        ...    def x(self):
+        ...       return self._x
+        ...
+        ...    # @nmevent.nmproperty could have been used,
+        ...    # but this way it is more obvious what x is.
+        ...    x = nmevent.Property(x)
+        ...
+        ...    # This is how it's supposed to be used.
+        ...    @x.setter
+        ...    def set_x(self, value):
+        ...       self._x = value
+        ...
+        ...    # Also works, but looks ugly.
+        ...    x.setter(set_x)
+        ...
+
+        :param function: the property setter function
+        :returns: self
         """
         self.fset = function
         return self
@@ -264,6 +427,9 @@ class Property(object):
         """Property.deleter(function) - method decorator te set the delete function.
 
         Works exatcly like the built-in @property.deleter.
+        
+        :param function: the property deleter function
+        :returns: self
         """
         self.fdel = function
         return self
@@ -279,6 +445,27 @@ def nmproperty(function):
 
     This decorator is called :func:`nmproperty` to avoid name conflict
     with the built-in `property` function and decorator.
+
+    Usage:
+
+    >>> class ExampleClass(object):
+    ...    @nmevent.nmproperty
+    ...    def x(self):
+    ...       return self._x
+    ...    
+    ...    @x.setter
+    ...    def x(self, value)
+    ...       self._x = value
+    ...
+    ...    x_changed = EventSlot
+    ...    x.changed = x_changed
+    ...
+    >>> example = ExampleClass()
+    >>> example.x_changed += handler # "handler" will be called when the value of x changes
+    >>> example.x = 10 # value of x changed, "handler" should get called
+
+    The changed events can be automatically created and set
+    by the :func:`with_events` decorator.
 
     :param function: function to be used as the property getter function
     :returns: new `Property` object
