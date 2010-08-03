@@ -12,7 +12,7 @@ egg: README docs
 wininst: README docs
 	$(PYTHON) setup.py bdist_wininst
 
-docs:
+docs: doc/conf.py doc/index.rst nmevent/nmevent.py
 	make -C doc html
 
 clean:

@@ -1,7 +1,7 @@
 
 SPHINX-BUILD = sphinx-build
 
-html:
+html: conf.py index.rst ../nmevent/nmevent.py
 	$(SPHINX-BUILD) . html/
 
 clean:
