@@ -18,12 +18,13 @@ setup(
 	
 	package_dir = {'': 'nmevent'},
 	py_modules  = ['nmevent'],
+	provides    = ['nmevent'],
 	# packages  = ['nmevent', ],
 	keywords    = 'library event observer pattern',
 	license     = 'Lesser General Public License v3',
 	
 	classifiers = [
-		'Development Status :: 1 - Planning',
+		'Development Status :: 3 - Alpha',
 		'Intended Audience :: Developers',
 		'License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)',
 		'Natural Language :: English',
