@@ -30,7 +30,7 @@ works as a sort of "dispatch demultiplexer".
 
 This usage, however, isn't very C#-like. In C#, events are declared in class
 scope and that's why the :class:`Event` class also supports the descriptor
-protocol.
+protocol (you can use the same way you use the built-in ``property`` object).
 
 >>> from nmevent import EventSlot
 >>> class ExampleClass(object):
@@ -114,6 +114,39 @@ import __builtin__
 
 EVENTS_ATTRIBUTE = '__nmevents__'
 
+class CallbackStore(object):
+    def __init__(self):
+        self.callbacks = set()
+
+    def __iter__(self):
+        return iter(self.callbacks)
+
+    def add(self, callback):
+        self.callbacks.add(callback)
+        return self
+    __iadd__ = add
+
+    def remove(self, callback):
+        self.callbacks.remove(callback)
+        return self
+    __isub__ = remove
+
+    def contains(self, callback):
+        return callback in self.callbacks
+    __contains__ = contains
+
+    def count(self):
+        return len(self.callbacks)
+    __len__ = count
+
+    def clear(self):
+        self.callbacks = set()
+
+    def call(self, *args, **keywords):
+        for callback in self.callbacks:
+            callback(*args, **keywords)
+    __call__ = call
+
 class Event(object):
     """Subject in the observer pattern.
 
@@ -132,21 +165,28 @@ class Event(object):
     ...
     """
 
-    __slots__ = ('handlers', )
+    __slots__ = ('__handlers__', )
 
+    @property
+    def handlers(self):
+        if self.__handlers__ is None:
+            self.__handlers__ = CallbackStore()
+        return self.__handlers__
+        
     def __init__(self):
-        self.handlers = set()
+        self.__handlers__ = None
 
     def __get__(self, obj, objtype = None):
         return self.bind(objtype, obj)
 
     def __set__(self, obj, value):
+        # raise AttributeError, "Events are read-only attributes."
+        pass
+
+    def __delete__(self, obj):
         raise AttributeError, "Events are read-only attributes."
 
-    def __del__(self, obj):
-        raise AttributeError, "Events are read-only attributes."
-
-    def bind(objtype, obj = None):
+    def bind(self, objtype, obj = None):
         """Binds the event to a class and optionally an instance."""
         return InstanceEvent(self, objtype, obj)
     
@@ -185,14 +225,13 @@ class Event(object):
     def fire(self, sender, *args, **keywords):
         """Fires this event and calls all of its handlers.
         """
-        for handler in self.handlers:
-            handler(sender, *args, **keywords)
+        self.handlers.call(sender, *args, **keywords)
     __call__ = fire
     
     def disconnect(self):
         """Disconnects this event from all handlers.
         """
-        self.handlers = set()
+        self.handlers.clear()
 
 class InstanceEvent(object):
     """Bound or unbound event.
@@ -240,7 +279,21 @@ class InstanceEvent(object):
     def is_bound(self):
         """``True`` if the event is bound to a sender, ``False`` otherwise."""
         return bool(self.im_sender is not None)
-    
+
+    @property
+    def handlers(self):
+        if not self.is_bound:
+            return self.im_event.handlers
+        
+        sender = self.im_sender
+        if sender is None:
+            return None
+        
+        events = sender.__dict__.setdefault(EVENTS_ATTRIBUTE, {})
+        handlers = events.setdefault(id(self.im_event), CallbackStore())
+
+        return handlers
+
     def __init__(self, event, clss, sender = None):
         self.im_event = event
         self.im_class = clss
@@ -257,22 +310,36 @@ class InstanceEvent(object):
                     "%s instance as the first argument." % (self.im_class.__name__))
             sender = args[0]
             args = args[1:]
-        events = sender.__dict__.get(EVENTS_ATTRIBUTE, None)
-        if events is None:
-            events = {}
-            sender.__dict__[self.EVENTS_ATTRIBUTE] = events
-        event = events.get(id(self.im_event), None)
-        if event is None:
-            event = Event()
-            events[id(self.im_event)] = event
-        event(sender, *args, **keywords)
-        return self.im_event(sender, *args, **keywords)
+        return self.handlers(sender, *args, **keywords)
+
+    def __iadd__(self, handler):
+        if self.is_bound:
+            self.handlers.add(handler)
+        else:
+            self.im_event += handler
+        return self
+
+    def __isub__(self, handler):
+        if self.is_bound:
+            self.handlers.remove(handler)
+        else:
+            self.im_event -= handler
+        return self
+
+    def __contains__(self, handler):
+        if self.is_bound:
+            return handler in self.handlers
+        else:
+            return handler in self.im_event
+
+    def __getattr__(self, name):
+        return getattr(self.im_event, name)
 
     def __str__(self):
         if self.is_bound:
             return "<bound event>"
         return "<unbound event>"
-
+    
 class Property(object):
     """Eventful property descriptor.
 
@@ -450,8 +517,7 @@ def nmproperty(function):
     Creates new :class:`Property` object using the decorated method
     as the getter function. Setter and deleter functions can be
     set by the :meth:`Property.setter` and :meth:`Property.deleter`
-    decorators where "name" is the name of the property (the name
-    of the getter function).
+    decorators.
 
     This decorator is called :func:`nmproperty` to avoid name conflict
     with the built-in `property` function and decorator.
@@ -474,8 +540,8 @@ def nmproperty(function):
     >>> example.x_changed += handler # "handler" will be called when the value of x changes
     >>> example.x = 10 # value of x changed, "handler" should get called
 
-    The changed events can be automatically created and set
-    by the :func:`with_events` decorator.
+    The :attr:`Property.changed` events can be automatically created and set
+    by the :func:`with_events` decorator when used on the class.
 
     :param function: function to be used as the property getter function
     :returns: new `Property` object
@@ -485,22 +551,60 @@ def nmproperty(function):
 def with_events(clss):
     """Decorates a class with some automatic event slots.
 
-    Automatically adds property change notification events
-    of the name "x_changed", where x is the name of the
-    property.
-
     :param clss: class object to be decorated
-    :returns: decorated class
+    :returns:    decorated class
+
+    Automatically adds property change notification events of the name
+    "x_changed", where x is the name of the property.
+
+    Usage:
+
+    >>> @nmevent.with_events
+    ... class Example(object):
+    ...    @nmevent.nmproperty
+    ...    def x(self):
+    ...       return self._x
+    ...
+    ...    @x.setter
+    ...    def x(self, value):
+    ...       self._x
+    ...
+    ...    def __init__(self):
+    ...       self._x = 0
+    ...
+    >>> def x_changed_handler(self, sender, **keywords):
+    ...    old_value = keywords['old_value']
+    ...    print "x changed; %r -> %r" % (old_value, sender.x)
+    ...
+    >>> def property_changed_handler(self, sender, **keywords):
+    ...    old_value = keywords['old_value']
+    ...    name = keywords['name']
+    ...    print "property \"%s\" changed, %r -> %r" % (old_value, sender.x)
+    ...
+    >>> example = Example()
+    >>> example.x_changed += x_changed_handler
+    >>> example.property_changed_handler += property_changed_handler
+    >>> example.x = 42
+
+    In the example above, the :func:`with_events` decorator automatically
+    decorates the class with an ``x_changed`` event and ``property_changed``
+    event connects them to the instance of :class:`Property` class created by
+    the :func:`nmproperty` decorator.
+
+    Simply put, the class has ``x_changed`` event and ``property_changed``
+    events that are raised when the value of ``Example.x`` changes.
+    ``x_changed`` gets called only when ``Example.x`` changes,
+    ``property_changed`` gets called when any property changes.
     """
 
-    property_changed = EventSlot()
+    property_changed = Event()
     setattr(clss, "property_changed", property_changed)
 
     for name, attr in clss.__dict__.items():
         if isinstance(attr, __builtin__.property):
-            setattr(clss, name + "_changed", EventSlot())
+            setattr(clss, name + "_changed", Event())
         elif isinstance(attr, Property):
-            slot = EventSlot()
+            slot = Event()
             setattr(clss, name + "_changed", slot)
             attr.changed = slot
             attr.property_changed = property_changed
