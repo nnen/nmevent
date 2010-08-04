@@ -115,34 +115,53 @@ import __builtin__
 EVENTS_ATTRIBUTE = '__nmevents__'
 
 class CallbackStore(object):
+    """Collection of callbacks."""
+
     def __init__(self):
+        """Constructor."""
         self.callbacks = set()
 
     def __iter__(self):
+        """Returns the collection's iterator object."""
         return iter(self.callbacks)
 
     def add(self, callback):
+        """Adds a callback to callection.
+
+        :param callback: callable object to be added
+        """
         self.callbacks.add(callback)
         return self
     __iadd__ = add
 
     def remove(self, callback):
+        """Removes a callback from the collection.
+
+        :param callback: callback to be removed
+        """
         self.callbacks.remove(callback)
         return self
     __isub__ = remove
 
     def contains(self, callback):
+        """Returns ``True`` is ``callback`` is in the collection.
+
+        :param callback: callback to check for
+        """
         return callback in self.callbacks
     __contains__ = contains
 
     def count(self):
+        """Returns the number of callbacks in the collection."""
         return len(self.callbacks)
     __len__ = count
 
     def clear(self):
+        """Removes all callbacks from collection."""
         self.callbacks = set()
 
     def call(self, *args, **keywords):
+        """Calls all callbacks with the given arguments."""
         for callback in self.callbacks:
             callback(*args, **keywords)
     __call__ = call
@@ -169,6 +188,7 @@ class Event(object):
 
     @property
     def handlers(self):
+        """Collection of this event's handlers."""
         if self.__handlers__ is None:
             self.__handlers__ = CallbackStore()
         return self.__handlers__
@@ -282,16 +302,13 @@ class InstanceEvent(object):
 
     @property
     def handlers(self):
+        """:class:`CallbackStore` object that stores this event's handlers."""
         if not self.is_bound:
             return self.im_event.handlers
         
         sender = self.im_sender
-        if sender is None:
-            return None
-        
         events = sender.__dict__.setdefault(EVENTS_ATTRIBUTE, {})
         handlers = events.setdefault(id(self.im_event), CallbackStore())
-
         return handlers
 
     def __init__(self, event, clss, sender = None):
@@ -307,7 +324,8 @@ class InstanceEvent(object):
                     "at least 1 positional argument representing the sender.")
             if type(args[0]) is not self.im_class:
                 raise TypeError, ("This unbound event must be called with "
-                    "%s instance as the first argument." % (self.im_class.__name__))
+                    "%s instance as the first argument." % 
+                        (self.im_class.__name__))
             sender = args[0]
             args = args[1:]
         return self.handlers(sender, *args, **keywords)
@@ -501,7 +519,7 @@ class Property(object):
         return self
 
     def deleter(self, function):
-        """Property.deleter(function) - method decorator te set the delete function.
+        """Method decorator to set the delete function.
 
         Works exatcly like the built-in @property.deleter.
         

@@ -266,6 +266,97 @@ class EventTest(unittest.TestCase):
 		test1.event2()
 		self.assertEqual(observer1.event_count, 1)
 		self.assertEqual(observer2.event_count, 1)
+	
+	def test_descriptor_get(self):
+		class TestClass(object):
+			event = nmevent.Event()
+		self.assertTrue(isinstance(TestClass.__dict__['event'], nmevent.Event))
+		self.assertTrue(isinstance(TestClass.event, nmevent.InstanceEvent))
+		self.assertFalse(TestClass.event.is_bound)
+
+		test1 = TestClass()
+		test2 = TestClass()
+		self.assertTrue(isinstance(test1.event, nmevent.InstanceEvent))
+		self.assertTrue(test1.event.is_bound)
+		self.assertFalse(test1.event is test2.event)
+		self.assertTrue(test1.event.im_event is test2.event.im_event)
+		self.assertTrue(test1.event.handlers is test1.event.handlers)
+		self.assertFalse(test1.event.handlers is test2.event.handlers)
+	
+	def test_descriptor_set(self):
+		event = nmevent.Event()
+		class TestClass(object):
+			pass
+		TestClass.event = event
+		def test():
+			TestClass.event = "any value"
+		#self.assertRaises(AttributeError, test)
+		self.assertTrue(TestClass.__dict__['event'] is event)
+	
+	def test_descriptor_delete(self):
+		class TestClass(object):
+			event = nmevent.Event()
+		inst = TestClass()
+		def test():
+			del inst.event
+		self.assertRaises(AttributeError, test)
+		self.assertTrue(isinstance(inst.event, nmevent.InstanceEvent))
+
+class TestInstanceEvent(unittest.TestCase):
+	def setUp(self):
+		self.event = nmevent.Event()
+		class TestClass(object):
+			pass
+		self.test_class = TestClass
+		self.instance = TestClass()
+		self.unbound = nmevent.InstanceEvent(self.event, TestClass)
+		self.bound = nmevent.InstanceEvent(self.event, TestClass, self.instance)
+	
+	def test_call_unbound(self):
+		def test():
+			self.unbound()
+		self.assertRaises(TypeError, test)
+
+		try:
+			self.unbound(self.instance)
+		except TypeError:
+			self.fail("Cannot call unbound event with instance.")
+
+		def test():
+			self.unbound("not a TestClass")
+		self.assertRaises(TypeError, test)
+
+	def test_call_bound(self):
+		try:
+			self.bound()
+		except TypeError:
+			self.fail("Cannot call bound event without instance.")
+	
+class PropertyTest(unittest.TestCase):
+	def setUp(self):
+		class TestClass(object):
+			def get_x(self):
+				return self._x
+			def set_x(self, value):
+				self._x = value
+			def __init__(self):
+				self._x = None
+			x = nmevent.Property(get_x, set_x)
+			no_rw = nmevent.Property()
+		self.test_class = TestClass
+		self.instance = TestClass()
+	
+	def test_get_set(self):
+		try:
+			self.instance.x = 13
+		except AttributeError:
+			self.fail("Setter threw error.")
+
+		self.assertEqual(self.instance.x, 13)
+
+		def test():
+			self.instance.no_rw = 13
+		self.assertRaises(AttributeError, test)
 
 class WithEventsTest(unittest.TestCase):
 	def test_class(self):
