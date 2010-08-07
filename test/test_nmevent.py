@@ -402,6 +402,9 @@ class WithEventsTest(unittest.TestCase):
 
 		self.assertTrue(observer.event_count == 1)
 
-if __name__ == "__main__":
+def do_test():
 	unittest.main()
+
+if __name__ == "__main__":
+	do_test()
 

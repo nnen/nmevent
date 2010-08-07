@@ -1,13 +1,14 @@
 # -*- encoding: utf-8 -*-
 # vim: expandtab:tabstop=4:softtabstop=4:autoindent
 
-"""nmevent v0.2 - C#-like implementation of the Observer pattern
+"""nmevent v0.2.1 - C#-like implementation of the Observer pattern
 
 This is a Python module :mod:`nmevent`, simple C#-like implementation of
 the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
 It's main purpose and goal is to allow developers to use events
 with C#-like syntax in their Python classes.
 
+=============
 Usage example
 =============
 
@@ -83,6 +84,7 @@ function or elsewhere.
 >>> example.x_changed += handler
 >>> example.x = 10 # handler gets called
 
+=======
 License
 =======
 
@@ -100,6 +102,27 @@ GNU Lesser General Public License for more details.
 
 You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+=======
+Changes
+=======
+
+v0.1
+  Initial release.
+
+v0.1.1
+  No changes in source code. Improved documentation and unit tests.
+
+v0.2
+  Rewritten most of the code. The :class:`Event` class now works as a 
+  descriptor, which eliminated the need for a separate :class:`EventSlot`
+  class and simplified usage. Added :class:`CallbackStore` to abstract
+  the callback storage. 
+
+v0.2.1
+  Rewritten some unit tests and added new ones. Improved documentation
+  a little bit.
+
 """
 
 __version__ = __doc__.splitlines()[0].split(' ')[1][1:]

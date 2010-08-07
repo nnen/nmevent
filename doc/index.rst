@@ -42,6 +42,9 @@ Types
 .. autoclass:: nmevent.Property
 	:members:
 
+.. autoclass:: nmevent.CallbackStore
+	:members:
+
 Functions
 ---------
 

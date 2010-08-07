@@ -22,6 +22,8 @@ setup(
 	# packages  = ['nmevent', ],
 	keywords    = 'library event observer pattern',
 	license     = 'Lesser General Public License v3',
+
+	test_suite = 'test.test_nmevent',
 	
 	classifiers = [
 		'Development Status :: 3 - Alpha',
