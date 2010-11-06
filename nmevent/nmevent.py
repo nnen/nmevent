@@ -1,5 +1,5 @@
 # -*- encoding: utf-8 -*-
-# vim: expandtab:tabstop=4:softtabstop=4:autoindent
+# vim: expandtab:tabstop=4:shiftwidth=4:softtabstop=4:autoindent
 
 """nmevent v0.2.1 - C#-like implementation of the Observer pattern
 
@@ -221,7 +221,7 @@ class Event(object):
 
     def __get__(self, obj, objtype = None):
         return self.bind(objtype, obj)
-
+    
     def __set__(self, obj, value):
         # raise AttributeError, "Events are read-only attributes."
         pass
@@ -351,8 +351,9 @@ class InstanceEvent(object):
                         (self.im_class.__name__))
             sender = args[0]
             args = args[1:]
+            return self.im_event.bind(self.im_class, sender)(*args, **keywords)
         return self.handlers(sender, *args, **keywords)
-
+    
     def __iadd__(self, handler):
         if self.is_bound:
             self.handlers.add(handler)
@@ -460,11 +461,11 @@ class Property(object):
        ``INotifyPropertyChanged`` interface (see
        http://msdn.microsoft.com/en-US/library/system.componentmodel.inotifypropertychanged.aspx)
     """
-
+    
     @property
     def name(self):
         """The name of the property.
-
+        
         This should be the name of an object's attribute
         that holds the property. The name is guessed by
         retrieving the name of the getter function if present.
@@ -472,24 +473,24 @@ class Property(object):
         if self.fget is not None:
             return self.fget.__name__
         return None
-
+    
     def __init__(self, fget = None, fset = None, fdel = None,
                  changed = None, property_changed = None):
         """Constructor."""
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
-
+        
         self.changed = changed
         self.property_changed = property_changed
-
+    
     def __get__(self, obj, objtype = None):
         if obj is None:
             return self
         if self.fget is None:
             raise AttributeError, "Unreadable attribute."
         return self.fget(obj)
-
+    
     def __set__(self, obj, value):
         if self.fset is None:
             raise AttributeError, "Can't set attribute."
@@ -500,24 +501,24 @@ class Property(object):
         self.fset(obj, value)
         if old_value != value:
             if self.changed is not None:
-                self.changed(old_value = old_value)
+                self.changed(obj, old_value = old_value)
             if self.property_changed is not None:
-                self.property_changed(old_value = old_value, name = self.name)
-
+                self.property_changed(obj, old_value = old_value, name = self.name)
+    
     def __delete__(self, obj):
         if self.fdel is None:
             raise AttributeError, "Can't delete attribute."
         self.fdel(obj)
-
+    
     def setter(self, function):
         """Sets the setter function and returns self.
-
+        
         This function is meant to be used as a method decorator,
         even though it can be called directly to set the
         setter function of its property.
-
+        
         Usage:
-
+        
         >>> class ExampleClass(object):
         ...    def x(self):
         ...       return self._x
@@ -534,7 +535,7 @@ class Property(object):
         ...    # Also works, but looks ugly.
         ...    x.setter(set_x)
         ...
-
+        
         :param function: the property setter function
         :returns: self
         """
@@ -554,17 +555,17 @@ class Property(object):
 
 def nmproperty(function):
     """Eventful property decorator.
-
+    
     Creates new :class:`Property` object using the decorated method
     as the getter function. Setter and deleter functions can be
     set by the :meth:`Property.setter` and :meth:`Property.deleter`
     decorators.
-
+    
     This decorator is called :func:`nmproperty` to avoid name conflict
     with the built-in `property` function and decorator.
-
+    
     Usage:
-
+    
     >>> class ExampleClass(object):
     ...    @nmevent.nmproperty
     ...    def x(self):
@@ -574,16 +575,16 @@ def nmproperty(function):
     ...    def x(self, value)
     ...       self._x = value
     ...
-    ...    x_changed = EventSlot
+    ...    x_changed = Event()
     ...    x.changed = x_changed
     ...
     >>> example = ExampleClass()
     >>> example.x_changed += handler # "handler" will be called when the value of x changes
     >>> example.x = 10 # value of x changed, "handler" should get called
-
+    
     The :attr:`Property.changed` events can be automatically created and set
     by the :func:`with_events` decorator when used on the class.
-
+    
     :param function: function to be used as the property getter function
     :returns: new `Property` object
     """
@@ -637,17 +638,32 @@ def with_events(clss):
     ``x_changed`` gets called only when ``Example.x`` changes,
     ``property_changed`` gets called when any property changes.
     """
-
+    
     property_changed = Event()
     setattr(clss, "property_changed", property_changed)
 
     for name, attr in clss.__dict__.items():
+        changed_attr = "%s_changed" % name
         if isinstance(attr, __builtin__.property):
-            setattr(clss, name + "_changed", Event())
+            setattr(clss, changed_attr, Event())
         elif isinstance(attr, Property):
-            slot = Event()
-            setattr(clss, name + "_changed", slot)
-            attr.changed = slot
+            setattr(clss, changed_attr, Event())
+            # Use getattr to bind the event to the class.
+            attr.changed = getattr(clss, changed_attr)
             attr.property_changed = property_changed
+    return clss
+
+def with_properties(clss):
+    for name, attr in clss.__dict__.items():
+        if isinstance(attr, Property):
+            private_attr = "_%s" % name
+            def getter(self):
+                if not hasattr(self, private_attr):
+                    setattr(self, private_attr, None)
+                return getattr(self, private_attr)
+            def setter(self, value):
+                setattr(self, private_attr, value)
+            attr.fget = getter
+            attr.fset = setter
     return clss
 

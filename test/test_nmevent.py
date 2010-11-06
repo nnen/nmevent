@@ -1,7 +1,8 @@
 # -*- coding: utf8 -*-
 
 import sys
-sys.path.append(sys.path[0] + '/../nmevent')
+# sys.path.append(sys.path[0] + '/../nmevent')
+sys.path.insert(1, sys.path[0] + '/../nmevent')
 
 import unittest
 import nmevent
@@ -31,7 +32,7 @@ class Observer(object):
 		self.event_caught = False
 		self.event_count = 0
 
-	def handler(self, sender):
+	def handler(self, sender, *args, **keywords):
 		self.event_caught = True
 		self.event_count += 1
 
@@ -331,7 +332,7 @@ class TestInstanceEvent(unittest.TestCase):
 			self.bound()
 		except TypeError:
 			self.fail("Cannot call bound event without instance.")
-	
+
 class PropertyTest(unittest.TestCase):
 	def setUp(self):
 		class TestClass(object):
@@ -400,7 +401,34 @@ class WithEventsTest(unittest.TestCase):
 		c.x_changed += observer.handler
 		c.x = 10
 
-		self.assertTrue(observer.event_count == 1)
+		self.assertEqual(observer.event_count, 1)
+	
+	def test_with_nmproperty(self):
+		@nmevent.with_events
+		class C(object):
+			@nmevent.nmproperty
+			def x(self):
+				return self._x
+			
+			@x.setter
+			def x(self, value):
+				self._x = value
+			
+			def __init__(self):
+				self._x = None
+		
+		observer = Observer()
+		
+		c = C()
+		self.assertTrue(hasattr(c, "x_changed"))
+		self.assertTrue(isinstance(c.x_changed, nmevent.InstanceEvent))
+		
+		c.x_changed += observer.handler
+		self.assertTrue(observer.handler in c.x_changed)
+		
+		c.x = 1
+		c.x = 2
+		self.assertEqual(observer.event_count, 2)
 
 def do_test():
 	unittest.main()
