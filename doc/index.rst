@@ -50,6 +50,7 @@ Functions
 
 .. autofunction:: nmevent.nmproperty
 .. autofunction:: nmevent.with_events
+.. autofunction:: nmevent.with_properties
 
 Indices and tables
 ==================

@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 # vim: expandtab:tabstop=4:shiftwidth=4:softtabstop=4:autoindent
 
-"""nmevent v0.2.1 - C#-like implementation of the Observer pattern
+"""nmevent v0.3 - C#-like implementation of the Observer pattern
 
 This is a Python module :mod:`nmevent`, simple C#-like implementation of
 the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
@@ -123,6 +123,13 @@ v0.2.1
   Rewritten some unit tests and added new ones. Improved documentation
   a little bit.
 
+v0.3
+  Fixed a major bug, which caused an unbound event not to be actually
+  bound when called with an object instance as the first argument.
+
+  Added the :func:`with_properties` class decorator, which automatically
+  decorates a class with "private" attributes for each property and
+  automatic getters and setters where either one of them is missing.
 """
 
 __version__ = __doc__.splitlines()[0].split(' ')[1][1:]
@@ -130,6 +137,7 @@ __author__ = u"Jan Milik <milikjan@fit.cvut.cz>"
 __all__    = [
     'nmproperty',
     'with_events',
+    'with_properties',
     'Event',
 ]
 
@@ -552,7 +560,7 @@ class Property(object):
         """
         self.fdel = function
         return self
-
+    
 def nmproperty(function):
     """Eventful property decorator.
     
@@ -654,16 +662,62 @@ def with_events(clss):
     return clss
 
 def with_properties(clss):
+    """Decorates a class with automatic "private" attributes.
+    
+    :param clss: class object to decorate.
+    :returns:    decorated class
+    
+    For every :class:`Property` instance within the class'
+    dictionary, it creates a setter and getter (unless they
+    are already set to a non-None value). These setters
+    and getters use "private" attributes - attributes
+    that the same name as the property prepended with an
+    underscore. In other words, for a property ``foo``,
+    you get an attribute called ``_foo`` where the actual
+    value is stored.
+    
+    Usage:
+    
+    >>> @nmevent.with_properties
+    ... class Example(object):
+    ...     foo = nmevent.Property()
+    ...     foo_changed = nmevent.Event()
+    ...     foo.changed = foo_changed
+    ...
+    >>> def on_foo_changed(sender, old_value):
+    ...     print "foo changed"
+    ... 
+    >>> x = Example()
+    >>> x.foo_changed += on_foo_changed
+    >>> x.foo = 42 # on_foo_changed gets called
+    
+    Used together with ``with_events``:
+    
+    >>> @nmevent.with_events
+    ... @nmevent.with_properties
+    ... class NextExample(object):
+    ...     bar = nmevent.Property()
+    ...
+    """
+    
     for name, attr in clss.__dict__.items():
         if isinstance(attr, Property):
             private_attr = "_%s" % name
-            def getter(self):
-                if not hasattr(self, private_attr):
-                    setattr(self, private_attr, None)
-                return getattr(self, private_attr)
-            def setter(self, value):
-                setattr(self, private_attr, value)
-            attr.fget = getter
-            attr.fset = setter
+            if not attr.fget:
+                def getter(self):
+                    if not hasattr(self, private_attr):
+                        setattr(self, private_attr, None)
+                    return getattr(self, private_attr)
+                attr.fget = getter
+            if not attr.fset:
+                def setter(self, value):
+                    setattr(self, private_attr, value)
+                attr.fset = setter
     return clss
+
+def decorated(clss):
+    """Convenience decorator, which simply combines the :func:`with_events`
+    and :func:`with_properties` decorators.
+    """
+    return with_events(with_properties(clss))
 

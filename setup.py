@@ -4,7 +4,7 @@
 from setuptools import setup
 import sys
 
-sys.path.append('nmevent')
+sys.path.insert(1, 'nmevent')
 import nmevent
 
 setup(
@@ -22,7 +22,7 @@ setup(
 	# packages  = ['nmevent', ],
 	keywords    = 'library event observer pattern',
 	license     = 'Lesser General Public License v3',
-
+	
 	test_suite = 'test.test_nmevent',
 	
 	classifiers = [
