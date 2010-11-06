@@ -33,7 +33,7 @@ This usage, however, isn't very C#-like. In C#, events are declared in class
 scope and that's why the :class:`Event` class also supports the descriptor
 protocol (you can use the same way you use the built-in ``property`` object).
 
->>> from nmevent import EventSlot
+>>> from nmevent import Event
 >>> class ExampleClass(object):
 ...    event = Event()
 ...
