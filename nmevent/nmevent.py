@@ -18,12 +18,17 @@ The most straightfoward way to use :mod:`nmevent` is this:
 >>> class ExampleClass(object):
 ...    def __init__(self):
 ...       self.event = nmevent.Event()
-...
-...    def _do_something(self):
+... 
+...    def do_something(self):
 ...       self.event(self)
+...
+>>> def handler(sender, **keywords):
+...    print "event occured"
 ...
 >>> example = ExampleClass()
 >>> example.event += handler
+>>> example.do_something()
+event occured
 
 It should be noted, that event doesn't necessarily need to be an object
 attribute. :class:`Event` instance is basically just a callable object that
@@ -60,7 +65,6 @@ instances of :class:`Property` class. It also creates events for the built-in
 ``property`` objects, but you have to raise the events yourself in the setter
 function or elsewhere.
 
->>> import nmevent
 >>> @nmevent.with_events
 ... class ExampleClass(object):
 ...    @nmevent.nmproperty
@@ -79,10 +83,18 @@ function or elsewhere.
 ...    def y(self, value):
 ...       old_value, self._y = self._y, value
 ...       self.y_changed(old_value = old_value)
+... 
+...    def __init__(self):
+...       self._x = None
+...       self._y = None
+...
+>>> def handler(sender, **keywords):
+...    print "x changed"
 ...
 >>> example = ExampleClass()
 >>> example.x_changed += handler
 >>> example.x = 10 # handler gets called
+x changed
 
 =======
 License
@@ -245,10 +257,10 @@ class Event(object):
         """Adds a handler (observer) to this event.
 
         ``__iadd__`` attribute of this class is just an alias of this
-        method, so the two following statements are equivalent:
-
-        >>> event.add_handler(handler)
-        >>> event += handler
+        method, so the last two of the following statements are equivalent:
+        
+        >>> event.add_handler(handler) # doctest: +SKIP
+        >>> event += handler # doctest: +SKIP
         """
         self.handlers.add(handler)
         return self
@@ -321,7 +333,7 @@ class InstanceEvent(object):
 
        The following condition must be always true:
 
-       >>> isinstance(self.im_sender, self.im_class)
+       >>> isinstance(self.im_sender, self.im_class) # doctest: +SKIP
     """
     
     __slots__ = ('im_event', 'im_class', 'im_sender', )
@@ -390,6 +402,11 @@ class InstanceEvent(object):
             return "<bound event>"
         return "<unbound event>"
     
+    def bind(self, objtype, obj):
+        if self.is_bound:
+            return self
+        return InstanceEvent(self.im_event, self.im_class, obj)
+
 class Property(object):
     """Eventful property descriptor.
 
@@ -408,17 +425,27 @@ class Property(object):
     Usage:
 
     >>> class Example(object):
-    ...    @nmproperty:
+    ...    @nmevent.nmproperty
     ...    def x(self):
     ...       return self._x
-    ...
+    ...    
     ...    @x.setter
     ...    def x(self, value):
     ...       self._x = value
+    ...    
+    ...    x_changed = nmevent.Event()
+    ...    x.changed = x_changed
+    ...    
+    ...    def __init__(self):
+    ...       self._x = 0
+    ...
+    >>> def handler(sender, **keywords):
+    ...    print "x changed, old value: %r, new value: %r" % (keywords['old_value'], sender.x)
     ...
     >>> example = Example()
-    >>> exmaple.x_changed += handler
+    >>> example.x_changed += handler
     >>> example.x = 42
+    x changed, old value: 0, new value: 42
 
     .. attribute:: fget
        
@@ -508,15 +535,20 @@ class Property(object):
         old_value = self.fget(obj)
         self.fset(obj, value)
         if old_value != value:
-            if self.changed is not None:
-                self.changed(obj, old_value = old_value)
-            if self.property_changed is not None:
-                self.property_changed(obj, old_value = old_value, name = self.name)
+            self.fire_changed(obj.__class__, obj, old_value)
     
     def __delete__(self, obj):
         if self.fdel is None:
             raise AttributeError, "Can't delete attribute."
         self.fdel(obj)
+    
+    def fire_changed(self, objtype, obj, old_value):
+        changed = self.changed and self.changed.bind(objtype, obj)
+        if changed:
+            changed(old_value = old_value)
+        property_changed = self.property_changed and self.property_changed.bind(objtype, obj)
+        if self.property_changed:
+            property_changed(old_value = old_value, name = self.name)
     
     def setter(self, function):
         """Sets the setter function and returns self.
@@ -580,15 +612,22 @@ def nmproperty(function):
     ...       return self._x
     ...    
     ...    @x.setter
-    ...    def x(self, value)
+    ...    def x(self, value):
     ...       self._x = value
     ...
-    ...    x_changed = Event()
+    ...    x_changed = nmevent.Event()
     ...    x.changed = x_changed
+    ...
+    ...    def __init__(self):
+    ...       self._x = None
+    ...
+    >>> def handler(sender, **keywords):
+    ...    print "handler called"
     ...
     >>> example = ExampleClass()
     >>> example.x_changed += handler # "handler" will be called when the value of x changes
-    >>> example.x = 10 # value of x changed, "handler" should get called
+    >>> example.x = 10 # value of x changed, "handler" gets called
+    handler called
     
     The :attr:`Property.changed` events can be automatically created and set
     by the :func:`with_events` decorator when used on the class.
@@ -617,25 +656,27 @@ def with_events(clss):
     ...
     ...    @x.setter
     ...    def x(self, value):
-    ...       self._x
+    ...       self._x = value
     ...
     ...    def __init__(self):
     ...       self._x = 0
     ...
-    >>> def x_changed_handler(self, sender, **keywords):
+    >>> def x_changed_handler(sender, **keywords):
     ...    old_value = keywords['old_value']
     ...    print "x changed; %r -> %r" % (old_value, sender.x)
     ...
-    >>> def property_changed_handler(self, sender, **keywords):
+    >>> def property_changed_handler(sender, **keywords):
     ...    old_value = keywords['old_value']
     ...    name = keywords['name']
-    ...    print "property \"%s\" changed, %r -> %r" % (old_value, sender.x)
+    ...    print "property '%s' changed, %r -> %r" % (name, old_value, sender.x)
     ...
     >>> example = Example()
     >>> example.x_changed += x_changed_handler
-    >>> example.property_changed_handler += property_changed_handler
+    >>> example.property_changed += property_changed_handler
     >>> example.x = 42
-
+    x changed; 0 -> 42
+    property 'x' changed, 0 -> 42
+    
     In the example above, the :func:`with_events` decorator automatically
     decorates the class with an ``x_changed`` event and ``property_changed``
     event connects them to the instance of :class:`Property` class created by
@@ -690,6 +731,7 @@ def with_properties(clss):
     >>> x = Example()
     >>> x.foo_changed += on_foo_changed
     >>> x.foo = 42 # on_foo_changed gets called
+    foo changed
     
     Used together with ``with_events``:
     
@@ -700,19 +742,25 @@ def with_properties(clss):
     ...
     """
     
+    def make_getter(attr):
+        def getter(self):
+            if not hasattr(self, attr):
+                setattr(self, attr, None)
+            return getattr(self, attr)
+        return getter
+
+    def make_setter(attr):
+        def setter(self, value):
+            setattr(self, attr, value)
+        return setter
+    
     for name, attr in clss.__dict__.items():
         if isinstance(attr, Property):
             private_attr = "_%s" % name
             if not attr.fget:
-                def getter(self):
-                    if not hasattr(self, private_attr):
-                        setattr(self, private_attr, None)
-                    return getattr(self, private_attr)
-                attr.fget = getter
+                attr.fget = make_getter(private_attr)
             if not attr.fset:
-                def setter(self, value):
-                    setattr(self, private_attr, value)
-                attr.fset = setter
+                attr.fset = make_setter(private_attr)
     return clss
 
 def decorated(clss):

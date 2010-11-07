@@ -1,11 +1,19 @@
 # -*- coding: utf8 -*-
 
+import unittest
+import doctest
 import sys
 # sys.path.append(sys.path[0] + '/../nmevent')
 sys.path.insert(1, sys.path[0] + '/../nmevent')
 
-import unittest
 import nmevent
+
+suite = unittest.TestSuite()
+suite.addTests(doctest.DocTestSuite(nmevent, {'nmevent': nmevent}))
+
+def case(clss):
+	suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(clss))
+	return clss
 
 def function_observer_a(sender, *args, **keywords):
 	pass
@@ -45,6 +53,7 @@ class CallableObserver(object):
 		self.event_caught = True
 		self.event_count += 1
 
+@case
 class CallbackStoreTest(unittest.TestCase):
 	def test_interface(self):
 		store = nmevent.CallbackStore()
@@ -161,7 +170,8 @@ class CallbackStoreTest(unittest.TestCase):
 		self.assertEqual(len(store), 0)
 		self.assertEqual(store.count(), 0)
 		self.assertFalse(observer.handler in store)
-	
+
+@case
 class EventTest(unittest.TestCase):
 	def test_interface(self):
 		event = nmevent.Event()
@@ -303,7 +313,8 @@ class EventTest(unittest.TestCase):
 		self.assertRaises(AttributeError, test)
 		self.assertTrue(isinstance(inst.event, nmevent.InstanceEvent))
 
-class TestInstanceEvent(unittest.TestCase):
+@case
+class InstanceEventTest(unittest.TestCase):
 	def setUp(self):
 		self.event = nmevent.Event()
 		class TestClass(object):
@@ -333,6 +344,7 @@ class TestInstanceEvent(unittest.TestCase):
 		except TypeError:
 			self.fail("Cannot call bound event without instance.")
 
+@case
 class PropertyTest(unittest.TestCase):
 	def setUp(self):
 		class TestClass(object):
@@ -343,9 +355,15 @@ class PropertyTest(unittest.TestCase):
 			def __init__(self):
 				self._x = None
 			x = nmevent.Property(get_x, set_x)
+			x_changed = nmevent.Event()
+			x.changed = x_changed
 			no_rw = nmevent.Property()
 		self.test_class = TestClass
 		self.instance = TestClass()
+	
+	def tearDown(self):
+		self.test_class = None
+		self.instance = None
 	
 	def test_get_set(self):
 		try:
@@ -358,7 +376,16 @@ class PropertyTest(unittest.TestCase):
 		def test():
 			self.instance.no_rw = 13
 		self.assertRaises(AttributeError, test)
+	
+	def test_changed_event(self):
+		observer = Observer()
+		self.instance.x_changed += observer.handler
+		self.instance.x = 1
+		self.instance.x = 2
+		self.instance.x = 3
+		self.assertEqual(observer.event_count, 3)
 
+@case
 class WithEventsTest(unittest.TestCase):
 	def test_class(self):
 		@nmevent.with_events
@@ -430,8 +457,30 @@ class WithEventsTest(unittest.TestCase):
 		c.x = 2
 		self.assertEqual(observer.event_count, 2)
 
+@case
+class WithPropertiesTest(unittest.TestCase):
+	def test_multiple_properties(self):
+		@nmevent.with_properties
+		class A(object):
+			foo = nmevent.Property()
+			bar = nmevent.Property()
+			x = nmevent.Property()
+			y = nmevent.Property()
+
+		a = A()
+		val = object()
+		a.foo = val
+		self.assertTrue(a.foo is val)
+		self.assertFalse(a.bar is val)
+		
+		a.bar = object()
+		self.assertTrue(a.bar is a._bar)
+		self.assertTrue(a.foo is a._foo)
+
 def do_test():
-	unittest.main()
+	runner = unittest.TextTestRunner()
+	runner.run(suite)
+	# unittest.main()
 
 if __name__ == "__main__":
 	do_test()
