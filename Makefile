@@ -12,6 +12,15 @@ egg: README docs
 wininst: README docs
 	$(PYTHON) setup.py bdist_wininst
 
+upload-linux: README docs
+	$(PYTHON) setup.py sdist upload
+	$(PYTHON) setup.py bdist_egg upload
+
+upload-win: README docs
+	$(PYTHON) setup.py sdist upload
+	$(PYTHON) setup.py bdist_egg upload
+	$(PYTHON) setup.py bdist_windows upload
+
 docs: doc/conf.py doc/index.rst nmevent/nmevent.py
 	make -C doc html
 

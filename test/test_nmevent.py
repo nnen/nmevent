@@ -9,6 +9,7 @@ sys.path.insert(1, sys.path[0] + '/../nmevent')
 import nmevent
 
 suite = unittest.TestSuite()
+suite.addTests(doctest.DocFileSuite('../doc/index.rst', globs = {'nmevent': nmevent}))
 suite.addTests(doctest.DocTestSuite(nmevent, {'nmevent': nmevent}))
 
 def case(clss):

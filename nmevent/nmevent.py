@@ -1,7 +1,7 @@
 # -*- encoding: utf-8 -*-
 # vim: expandtab:tabstop=4:shiftwidth=4:softtabstop=4:autoindent
 
-"""nmevent v0.3 - C#-like implementation of the Observer pattern
+"""nmevent v0.3.1 - C#-like implementation of the Observer pattern
 
 This is a Python module :mod:`nmevent`, simple C#-like implementation of
 the Observer pattern (http://en.wikipedia.org/wiki/Observer_pattern).
@@ -142,6 +142,13 @@ v0.3
   Added the :func:`with_properties` class decorator, which automatically
   decorates a class with "private" attributes for each property and
   automatic getters and setters where either one of them is missing.
+
+v0.3.1
+  Added docstring tests and fixed all the docstrings so that they
+  would pass. As a result, another problem was found with the event
+  binding. That problem was fixed by adding the :meth:`InstanceEvent.bind`
+  method to be used mainly by the :class:`Property` class when raising
+  the "changed" events.
 """
 
 __version__ = __doc__.splitlines()[0].split(' ')[1][1:]
@@ -403,6 +410,14 @@ class InstanceEvent(object):
         return "<unbound event>"
     
     def bind(self, objtype, obj):
+        """Attempts to bind the instance event to an instance.
+
+        Note that this method silently fails and returns self
+        when the event is already bound. This is by design
+        and is meant to unify the :class:`Event`'s and 
+        :class:`InstanceEvent`'s protocol.
+        """
+        
         if self.is_bound:
             return self
         return InstanceEvent(self.im_event, self.im_class, obj)
