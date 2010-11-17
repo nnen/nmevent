@@ -784,3 +784,33 @@ def decorated(clss):
     """
     return with_events(with_properties(clss))
 
+def adapt(observer, observable, prefix = "on_"):
+    """Connects observer's handlers to subject's events by their names.
+    
+    >>> class Observer(object):
+    ...    def on_x_happened(self, *senders, **keywords):
+    ...       print "x happened"
+    ... 
+    ...    def on_y_happened(self, *senders, **keywords):
+    ...       print "y happened"
+    ...
+    >>> class Observable(object):
+    ...    x_happened = nmevent.Event()
+    ...    y_happened = nmevent.Event()
+    ...
+    >>> observer = Observer()
+    >>> observable = Observable()
+    >>> nmevent.adapt(observer, observable)
+    >>> observable.x_happened()
+    x happened
+    >>> observable.y_happened()
+    y happened
+    
+    """
+    for attr in dir(observable):
+        value = getattr(observable, attr)
+        if isinstance(value, InstanceEvent) or isinstance(value, Event):
+            handler_name = prefix + attr
+            if hasattr(observer, handler_name):
+                value += getattr(observer, handler_name)
+

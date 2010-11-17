@@ -477,6 +477,29 @@ class WithPropertiesTest(unittest.TestCase):
 		a.bar = object()
 		self.assertTrue(a.bar is a._bar)
 		self.assertTrue(a.foo is a._foo)
+	
+	def test_with_events(self):
+		@nmevent.with_events
+		@nmevent.with_properties
+		class A(object):
+			foo = nmevent.Property()
+			bar = nmevent.Property()
+		
+		a = A()
+		b = A()
+		a.foo = object()
+		self.assertTrue(a.foo is not a.bar)
+		self.assertTrue(a.foo is not b.foo)
+		
+		observer_a = Observer()
+		observer_b = Observer()
+		a.foo_changed += observer_a.handler
+		a.bar_changed += observer_b.handler
+		a.foo = 1
+		a.foo = 2
+		a.foo = 3
+		self.assertEqual(observer_a.event_count, 3)
+		self.assertEqual(observer_b.event_count, 0)
 
 def do_test():
 	runner = unittest.TextTestRunner()
