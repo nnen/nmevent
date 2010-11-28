@@ -16,6 +16,21 @@ def case(clss):
 	suite.addTests(unittest.defaultTestLoader.loadTestsFromTestCase(clss))
 	return clss
 
+def create_class(events = [], methods = [], attrs = {}):
+	class Clss(object):
+		def __init__(self):
+			self.counter = 0
+			for name, clss in attrs.items():
+				setattr(self, name, clss())
+	for event in events:
+		setattr(Clss, event, nmevent.Event())
+	for method in methods:
+		def meth(self, *args, **keywords):
+			self.counter += 1
+		meth.__name__ = method
+		setattr(Clss, method, meth)
+	return Clss
+
 def function_observer_a(sender, *args, **keywords):
 	pass
 
@@ -49,7 +64,7 @@ class CallableObserver(object):
 	def __init__(self):
 		self.event_caught = False
 		self.event_count = 0
-
+	
 	def __call__(self, *args, **keywords):
 		self.event_caught = True
 		self.event_count += 1
@@ -537,6 +552,84 @@ class WithPropertiesTest(unittest.TestCase):
 		a.foo = 3
 		self.assertEqual(observer_a.event_count, 3)
 		self.assertEqual(observer_b.event_count, 0)
+
+@case
+class DiscoverHandlersTest(unittest.TestCase):
+	def test_simple(self):
+		subject = create_class(['event_a', 'event_b', ])()
+		observer = create_class([], ['on_event_a', 'on_event_b', ])()
+		
+		connections = list(nmevent.discover_handlers(observer, subject, "on_"))
+		
+		self.assertEqual(len(connections), 2)
+		self.assertTrue(isinstance(connections[0][0], nmevent.InstanceEvent))
+		self.assertEqual(connections[0][1], observer.on_event_a)
+		self.assertTrue(isinstance(connections[1][0], nmevent.InstanceEvent))
+		self.assertEqual(connections[1][1], observer.on_event_b)
+	
+	def test_nested(self):
+		subject = create_class(['some_event'], [], {
+			'attr1': create_class([], [], {
+				'attr2': create_class(['some_event', ])
+			}),
+		})()
+		observer = create_class([], ['on_attr1__attr2__some_event', ])()
+		
+		connections = list(nmevent.discover_handlers(observer, subject, "on_"))
+		
+		self.assertEqual(len(connections), 1)
+		self.assertEqual(connections[0][1], observer.on_attr1__attr2__some_event)
+
+@case
+class AdaptTest(unittest.TestCase):
+	def test_simple(self):
+		observer = create_class([], ['on_some_event', ])()
+		subject = create_class(['some_event', ])()
+		nmevent.adapt(observer, subject, "on_")
+		self.assertEqual(observer.counter, 0)
+		subject.some_event()
+		self.assertEqual(observer.counter, 1)
+		subject.some_event()
+		self.assertEqual(observer.counter, 2)
+	
+	def test_nested(self):
+		subject = create_class(['some_event'], [], {
+			'attr1': create_class([], [], {
+				'attr2': create_class(['some_event', ])
+			}),
+		})()
+		observer = create_class([], ['on_attr1__attr2__some_event', ])()
+		nmevent.adapt(observer, subject, "on_")
+		
+		self.assertEqual(observer.counter, 0)
+		subject.attr1.attr2.some_event()
+		subject.some_event()
+		self.assertEqual(observer.counter, 1)
+	
+	def test_disconnect(self):
+		subject = create_class(['some_event', 'other_event', ], [], {
+			'attr1': create_class([], [], {
+				'attr2': create_class(['some_event', ])
+			}),
+		})()
+		observer = create_class([], [
+			'on_some_event',
+			'on_other_event',
+			'on_attr1__attr2__some_event', ])()
+		nmevent.adapt(observer, subject, "on_")
+		self.assertTrue(
+			observer.on_attr1__attr2__some_event in subject.attr1.attr2.some_event)
+		self.assertTrue(
+			observer.on_some_event in subject.some_event)
+		self.assertTrue(
+			observer.on_other_event in subject.other_event)
+		nmevent.adapt(observer, subject, "on_", True)
+		self.assertFalse(
+			observer.on_attr1__attr2__some_event in subject.attr1.attr2.some_event)
+		self.assertFalse(
+			observer.on_some_event in subject.some_event)
+		self.assertFalse(
+			observer.on_other_event in subject.other_event)
 
 def run():
 	runner = unittest.TextTestRunner()

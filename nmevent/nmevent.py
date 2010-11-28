@@ -854,7 +854,24 @@ def decorated(clss):
     """
     return with_events(with_properties(clss))
 
-def adapt(observer, observable, prefix = "on_"):
+def discover_handlers(observer, subject, prefix):
+    """Discovers event handlers for the subject's events in the observer.
+    
+    This function is not meant to be used directly. Use the :func:`adapt()`
+    function instead.
+    """
+    for attr in dir(observer):
+        if not attr.startswith(prefix):
+            continue
+        parts = attr[len(prefix):].split("__")
+        event = subject
+        while len(parts) > 0:
+            event = getattr(event, parts[0], None)
+            parts.pop(0)
+        if isinstance(event, InstanceEvent) or isinstance(event, Event):
+            yield (event, getattr(observer, attr))
+
+def adapt(observer, observable, prefix = "on_", disconnect = False):
     """Connects observer's handlers to subject's events by their names.
     
     >>> class Observer(object):
@@ -877,10 +894,12 @@ def adapt(observer, observable, prefix = "on_"):
     y happened
     
     """
-    for attr in dir(observable):
-        value = getattr(observable, attr)
-        if isinstance(value, InstanceEvent) or isinstance(value, Event):
-            handler_name = prefix + attr
-            if hasattr(observer, handler_name):
-                value += getattr(observer, handler_name)
+    if disconnect:
+        def fn(event, handler):
+            event -= handler
+    else:
+        def fn(event, handler):
+            event += handler
+    for event, handler in discover_handlers(observer, observable, prefix):
+        fn(event, handler)
 
