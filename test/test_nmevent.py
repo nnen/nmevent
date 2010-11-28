@@ -55,6 +55,43 @@ class CallableObserver(object):
 		self.event_count += 1
 
 @case
+class WeakRefCallbackTest(unittest.TestCase):
+	def setUp(self):
+		class Clss(object):
+			def __init__(self):
+				self.foo_counter = 0
+				self.bar_counter = 0
+			def foo(self):
+				self.foo_counter += 1
+			def bar(self):
+				self.bar_counter += 1
+		self.Clss = Clss
+		self.obj1 = self.Clss()
+		self.obj2 = self.Clss()
+		self.r1_foo = nmevent.WeakRefCallback(self.obj1.foo)
+		self.r1_bar = nmevent.WeakRefCallback(self.obj1.bar)
+		self.r2_foo = nmevent.WeakRefCallback(self.obj2.foo)
+		self.r2_bar = nmevent.WeakRefCallback(self.obj2.bar)
+	
+	def test_method(self):
+		self.assertEqual(self.obj1.foo_counter, 0)
+		self.r1_foo()
+		self.assertEqual(self.obj1.foo_counter, 1)
+		del self.obj1
+		self.r1_foo()
+	
+	def test_is_alive(self):
+		self.assertTrue(self.r1_foo.is_alive)
+		del self.obj1
+		self.assertFalse(self.r1_foo.is_alive)
+	
+	def test_hash(self):
+		self.assertEqual(hash(self.r1_foo),
+			hash(nmevent.WeakRefCallback(self.obj1.foo)))
+		self.assertNotEqual(hash(self.r1_foo), hash(self.r1_bar))
+		self.assertNotEqual(hash(self.r1_foo), hash(self.r2_foo))
+
+@case
 class CallbackStoreTest(unittest.TestCase):
 	def test_interface(self):
 		store = nmevent.CallbackStore()
@@ -152,22 +189,22 @@ class CallbackStoreTest(unittest.TestCase):
 
 		self.assertEqual(len(store), 100)
 		self.assertEqual(store.count(), 100)
-
+		
 		store.clear()
-
+		
 		self.assertEqual(len(store), 0)
 		self.assertEqual(store.count(), 0)
-
+		
 		observer = Observer()
-
+		
 		store += observer.handler
-
+		
 		self.assertNotEqual(len(store), 0)
 		self.assertNotEqual(store.count(), 0)
 		self.assertTrue(observer.handler in store)
-
+		
 		store.clear()
-
+		
 		self.assertEqual(len(store), 0)
 		self.assertEqual(store.count(), 0)
 		self.assertFalse(observer.handler in store)
@@ -501,11 +538,11 @@ class WithPropertiesTest(unittest.TestCase):
 		self.assertEqual(observer_a.event_count, 3)
 		self.assertEqual(observer_b.event_count, 0)
 
-def do_test():
+def run():
 	runner = unittest.TextTestRunner()
 	runner.run(suite)
 	# unittest.main()
 
 if __name__ == "__main__":
-	do_test()
+	run()
 

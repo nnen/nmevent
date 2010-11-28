@@ -161,29 +161,77 @@ __all__    = [
 ]
 
 import __builtin__
+import weakref
 
 EVENTS_ATTRIBUTE = '__nmevents__'
 
+class WeakRefCallback(object):
+    @property
+    def is_alive(self):
+        return bool(self.callback and self.callback())
+    
+	def __init__(self, callback):
+		if hasattr(callback, "im_func"):
+			self.callback = weakref.ref(callback.im_self)
+			self.method = callback.im_func
+		else:
+			self.callback = weakref.ref(callback)
+			self.method = None
+	
+	def __repr__(self):
+		return "<WeakRefCallback(callback=%r, method=%r)>" % (self.callback, self.method)
+	
+	def __call__(self, *args, **keywords):
+		callback = self.callback and self.callback()
+		if not callback:
+			self.callback = None
+			return
+		if not self.method:
+			return callback(*args, **keywords)
+		return self.method.__get__(callback, type(callback))(*args, **keywords)
+    
+    def __hash__(self):
+        return hash((self.callback, self.method))
+    
+    def __eq__(self, other):
+        if not isinstance(other, WeakRefCallback):
+            return False
+        return hash(self) == hash(other)
+ 
 class CallbackStore(object):
     """Collection of callbacks."""
-
+    
     def __init__(self):
         """Constructor."""
         self.callbacks = set()
-
+    
     def __iter__(self):
         """Returns the collection's iterator object."""
         return iter(self.callbacks)
+    
+    def __iadd__(self, callback):
+        return self.add(callback)
 
+    def __isub__(self, callback):
+        return self.remove(callback)
+
+    def __contains__(self, callback):
+        return self.contains(callback)
+
+    def __len__(self):
+        return self.count()
+
+    def __call__(self, *args, **keywords):
+        return self.call(*args, **keywords)
+    
     def add(self, callback):
         """Adds a callback to callection.
-
+        
         :param callback: callable object to be added
         """
         self.callbacks.add(callback)
         return self
-    __iadd__ = add
-
+    
     def remove(self, callback):
         """Removes a callback from the collection.
 
@@ -191,30 +239,52 @@ class CallbackStore(object):
         """
         self.callbacks.remove(callback)
         return self
-    __isub__ = remove
-
+    
     def contains(self, callback):
         """Returns ``True`` is ``callback`` is in the collection.
 
         :param callback: callback to check for
         """
         return callback in self.callbacks
-    __contains__ = contains
-
+    
     def count(self):
         """Returns the number of callbacks in the collection."""
         return len(self.callbacks)
-    __len__ = count
-
+    
     def clear(self):
         """Removes all callbacks from collection."""
         self.callbacks = set()
-
+    
     def call(self, *args, **keywords):
         """Calls all callbacks with the given arguments."""
         for callback in self.callbacks:
             callback(*args, **keywords)
-    __call__ = call
+
+class WeakRefCallbackStore(CallbackStore):
+    def normalize(self, callback):
+        if isinstance(callback, WeakRefCallback):
+            return callback
+        return WeakRefCallback(callback)
+    
+    def __init__(self):
+        self.callbacks = {}
+    
+    def add(self, callback):
+        super(WeakRefCallbackStore, self).add(self.normalize(callback))
+
+    def remove(self, callback):
+        super(WeakRefCallbackStore, self).remove(self.normalize(callback))
+
+    def contains(self, callback):
+        super(WeakRefCallbackStore, self).contains(self.normalize(callback))
+
+    def call(self, *args, **keywords):
+        all_alive = True
+        for callback in self.callbacks:
+            callback(*args, **keywords)
+            all_alive = all_alive and callback.is_alive
+        if not all_alive:
+            self.callbacks = set([c for c in self.callbacks if c.is_alive])
 
 class Event(object):
     """Subject in the observer pattern.
